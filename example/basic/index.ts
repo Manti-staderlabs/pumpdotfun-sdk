@@ -63,92 +63,104 @@ const main = async () => {
 
   console.log(await sdk.getGlobalAccount());
 
-  //Check if mint already exists
-  let boundingCurveAccount = await sdk.getBondingCurveAccount(mint.publicKey);
-  if (!boundingCurveAccount) {
-    let tokenMetadata = {
-      name: "TST-7",
-      symbol: "TST-7",
-      description: "TST-7: This is a test token",
-      file: await fs.openAsBlob("example/basic/random.png"),
-    };
+  // Track time and SOL costs
+  const startTime = Date.now();
+  const initialSolBalance = await connection.getBalance(testAccount.publicKey);
+  let successfulCreations = 0;
+  
+  console.log(`\n💰 Initial SOL Balance: ${initialSolBalance / LAMPORTS_PER_SOL} SOL`);
+  console.log(`⏰ Starting meme creation at: ${new Date().toLocaleTimeString()}`);
 
-    let createResults = await sdk.createAndBuy(
-      testAccount,
-      mint,
-      tokenMetadata,
-      BigInt(0.0001 * LAMPORTS_PER_SOL),
-      SLIPPAGE_BASIS_POINTS,
-      {
-        unitLimit: 250000,
-        unitPrice: 250000,
-      },
-    );
+  // Generate random meme names and symbols
+  const memeNames = [
+    "DOGE SUPREME", "PEPE KING", "SHIBA MOON", "CAT COIN", "FROG PRINCE",
+    "ROCKET MEME", "DIAMOND HANDS", "MOON SHOT", "LASER EYES", "CHAD COIN"
+  ];
+  
+  const memeSymbols = [
+    "DOGES", "PEPEK", "SHIBM", "CATC", "FROGP",
+    "RKTM", "DMND", "MOON", "LASER", "CHAD"
+  ];
 
-    if (createResults.success) {
-      console.log("Success:", `https://pump.fun/${mint.publicKey.toBase58()}`);
-      boundingCurveAccount = await sdk.getBondingCurveAccount(mint.publicKey);
-      console.log("Bonding curve after create and buy", boundingCurveAccount);
-      printSPLBalance(connection, mint.publicKey, testAccount.publicKey);
-    }
-  } else {
-    console.log("boundingCurveAccount", boundingCurveAccount);
-    console.log("Success:", `https://pump.fun/${mint.publicKey.toBase58()}`);
-    printSPLBalance(connection, mint.publicKey, testAccount.publicKey);
-  }
+  const memeDescriptions = [
+    "The ultimate doge experience",
+    "Rare pepe collection token",
+    "Shiba inu to the moon",
+    "Cats rule the blockchain",
+    "Frog prince of DeFi",
+    "Rocket fuel for your portfolio",
+    "Diamond hands never sell",
+    "Moon mission activated",
+    "Laser eyes see the future",
+    "Chad energy token"
+  ];
 
-  if (boundingCurveAccount) {
-    //buy 0.0001 SOL worth of tokens
-    let buyResults = await sdk.buy(
-      testAccount,
-      mint.publicKey,
-      BigInt(0.0001 * LAMPORTS_PER_SOL),
-      SLIPPAGE_BASIS_POINTS,
-      {
-        unitLimit: 250000,
-        unitPrice: 250000,
-      },
-    );
+  // Create 10 random memes
+  for (let i = 0; i < 10; i++) {
+    const randomMint = Keypair.generate();
+    
+    console.log(`\n--- Creating Meme ${i + 1}/10 ---`);
+    console.log(`Mint: ${randomMint.publicKey.toBase58()}`);
+    
+    //Check if mint already exists (should be new)
+    let boundingCurveAccount = await sdk.getBondingCurveAccount(randomMint.publicKey);
+    if (!boundingCurveAccount) {
+      let tokenMetadata = {
+        name: memeNames[i],
+        symbol: memeSymbols[i],
+        description: memeDescriptions[i],
+        file: await fs.openAsBlob("example/basic/random.png"),
+      };
 
-    if (buyResults.success) {
-      printSPLBalance(connection, mint.publicKey, testAccount.publicKey);
-      console.log("Bonding curve after buy", await sdk.getBondingCurveAccount(mint.publicKey));
-    } else {
-      console.log("Buy failed");
-    }
-
-    //sell all tokens
-    let currentSPLBalance = await getSPLBalance(
-      connection,
-      mint.publicKey,
-      testAccount.publicKey
-    );
-    console.log("currentSPLBalance", currentSPLBalance);
-    if (currentSPLBalance) {
-      let sellResults = await sdk.sell(
+      let createResults = await sdk.createAndBuy(
         testAccount,
-        mint.publicKey,
-        BigInt(currentSPLBalance * Math.pow(10, DEFAULT_DECIMALS)),
+        randomMint,
+        tokenMetadata,
+        BigInt(0),
         SLIPPAGE_BASIS_POINTS,
         {
           unitLimit: 250000,
           unitPrice: 250000,
         },
       );
-      if (sellResults.success) {
-        await printSOLBalance(
-          connection,
-          testAccount.publicKey,
-          "Test Account keypair"
-        );
 
-        printSPLBalance(connection, mint.publicKey, testAccount.publicKey, "After SPL sell all");
-        console.log("Bonding curve after sell", await sdk.getBondingCurveAccount(mint.publicKey));
+      if (createResults.success) {
+        successfulCreations++;
+        console.log(`✅ Success ${i + 1}: https://pump.fun/${randomMint.publicKey.toBase58()}`);
+        boundingCurveAccount = await sdk.getBondingCurveAccount(randomMint.publicKey);
       } else {
-        console.log("Sell failed");
+        console.log(`❌ Create failed for meme ${i + 1}`);
       }
+    } else {
+      console.log(`Meme ${i + 1} already exists`);
     }
+    
+    // Small delay between creations to avoid rate limiting
+    await new Promise(resolve => setTimeout(resolve, 1000));
   }
+
+  // Calculate final statistics
+  const endTime = Date.now();
+  const finalSolBalance = await connection.getBalance(testAccount.publicKey);
+  const totalTimeMs = endTime - startTime;
+  const totalSolSpent = (initialSolBalance - finalSolBalance) / LAMPORTS_PER_SOL;
+  const avgTimePerMeme = totalTimeMs / 10;
+  const avgSolPerMeme = totalSolSpent / successfulCreations;
+
+  console.log("\n" + "=".repeat(60));
+  console.log("📊 MEME CREATION STATISTICS");
+  console.log("=".repeat(60));
+  console.log(`🎯 Successful Creations: ${successfulCreations}/10`);
+  console.log(`⏱️  Total Time: ${(totalTimeMs / 1000).toFixed(2)} seconds`);
+  console.log(`⏱️  Average Time per Meme: ${(avgTimePerMeme / 1000).toFixed(2)} seconds`);
+  console.log(`💰 Initial SOL Balance: ${(initialSolBalance / LAMPORTS_PER_SOL).toFixed(4)} SOL`);
+  console.log(`💰 Final SOL Balance: ${(finalSolBalance / LAMPORTS_PER_SOL).toFixed(4)} SOL`);
+  console.log(`💸 Total SOL Spent: ${totalSolSpent.toFixed(4)} SOL`);
+  if (successfulCreations > 0) {
+    console.log(`💸 Average SOL per Meme: ${avgSolPerMeme.toFixed(4)} SOL`);
+  }
+  console.log(`⏰ Finished at: ${new Date().toLocaleTimeString()}`);
+  console.log("=".repeat(60));
 };
 
 main();
